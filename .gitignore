@@ -1,0 +1,13 @@
+node_modules
+.next
+.env*
+.DS_Store
+coverage
+out
+.vscode
+*.log
+*.local
+*.test.ts.snap
+
+# Supabase
+supabase/.temp
