@@ -18,7 +18,8 @@
     "next-auth": "4.22.1",
     "@supabase/supabase-js": "2.26.0",
     "puppeteer": "21.3.0",
-    "minimist": "1.2.8"
+    "minimist": "1.2.8",
+    "node-fetch": "^3.4.0"
   },
   "devDependencies": {
     "typescript": "5.5.0",
