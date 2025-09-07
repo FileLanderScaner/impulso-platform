@@ -1,9 +1,10 @@
 import { getSession } from 'next-auth/react';
 import { createClient } from '@supabase/supabase-js';
+import type { NextApiRequest, NextApiResponse } from 'next';
 
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL||'', process.env.SUPABASE_SERVICE_ROLE_KEY||'');
 
-export default async function handler(req, res){
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const session = await getSession({ req });
   if(!session || !session.user?.email) return res.status(401).json({ error: 'Not authenticated' });
 

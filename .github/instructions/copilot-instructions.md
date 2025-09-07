@@ -1,154 +1,69 @@
-Transformar este repositorio en una plataforma interna de capacitación completa usando Next.js 14 (App Router) + Supabase + Vercel, incluyendo Admin UI, catálogo de cursos, integración Vimeo, foros, métricas, certificaciones y CI/CD.
-El proyecto debe estar funcional de inicio a fin sin requerir aprobación manual.
+# Copilot Instructions – Impulso Platform
 
-Arquitectura del Proyecto
-/app
-  /admin
-    page.tsx            # Admin Dashboard
-    /users              # Gestión de usuarios
-    /courses            # Gestión de cursos
-    /brands             # Gestión de marcas
-    /locations          # Gestión de sedes
-  /catalog
-    page.tsx            # Catálogo de cursos público
-    /[courseId]
-      page.tsx          # Detalle de curso
-      /lessons
-        [lessonId].tsx  # Detalle lección
-  /auth
-    login.tsx
-    onboarding.tsx
-  /forums
-    /[courseId]
-      page.tsx          # Hilos del curso
-      /[threadId]
-        page.tsx        # Posts del hilo
-/components
-  Button.tsx
-  Card.tsx
-  CourseCard.tsx
-  LessonCard.tsx
-  ForumThread.tsx
-  ForumPost.tsx
-  AdminTable.tsx
-/lib
-  supabaseClient.ts
-  pdfGenerator.ts      # Generación de certificados
-  auth.ts
-  utils.ts
-/supabase
-  /migrations           # SQL para tablas y RLS
-/tests
-  /unit
-  /e2e
+## Big Picture & Arquitectura
 
-Tablas en Supabase (Postgres + RLS)
+Impulso Platform es una plataforma multitenant de capacitación y onboarding, construida con Next.js 14 (Pages Router), Supabase (PostgreSQL, Auth, Storage, RLS), y desplegada en Vercel. El objetivo es ofrecer una solución SaaS lista para múltiples clientes (Tenant → Marca → Sede), con trazabilidad, onboarding forzado, emisión de certificados PDF y control de acceso por Google Workspace SSO.
 
-users: id, name, email, role (admin, instructor, student), brand_id, location_id, progress JSON
+### Componentes principales
+- **Frontend:** Next.js (TypeScript, React, Tailwind opcional), rutas en `/pages`, componentes en `/components`.
+- **Backend/BaaS:** Supabase (tablas, RLS, funciones, storage). Integración vía `@supabase/supabase-js`.
+- **Auth:** NextAuth.js (Google SSO, validación de dominios, onboarding forzado).
+- **CI/CD:** GitHub Actions (`lint`, `test`, `build`, `deploy` a Vercel).
+- **Certificados:** Generación server-side con Puppeteer (`scripts/generateCertificate.js` y `/templates/certificate.html`).
+- **Foros:** Tablas y endpoints para hilos y posts por curso/marca.
 
-brands: id, name, description
+### Data flow & Multitenancy
+- Modelo jerárquico: `tenants` → `brands` → `sites` (ver `/supabase/schema/init_extended.sql`).
+- Todas las tablas clave tienen `tenant_id`, `brand_id`, `site_id` y usan RLS para aislamiento.
+- El onboarding es obligatorio: los usuarios nuevos son redirigidos a `/welcome` hasta completarlo (ver `middleware.ts`).
+- Acceso a cursos, foros y certificados está filtrado por marca/sede y rol.
 
-locations: id, brand_id, name, address
+## Workflows y comandos clave
+- **Desarrollo:** `npm run dev` (Next.js local)
+- **Tests unitarios:** `npm run test:unit` (Jest + React Testing Library)
+- **Tests e2e:** `npm run test:e2e` (Playwright)
+- **Generar certificado PDF:** `npm run generate:cert -- --name="Nombre" --course="Curso" ...`
+- **Despliegue:** Push a main → GitHub Actions → Vercel (ver `DEPLOY.md`)
 
-courses: id, title, description, category, level, brand_id, location_id, published
+## Convenciones y patrones específicos
+- **Onboarding forzado:** Middleware (`middleware.ts`) y endpoint `/api/me/onboarding.ts` controlan acceso inicial.
+- **SSO Google Workspace:** Solo dominios permitidos (ver `.env.local` y `pages/api/auth/[...nextauth].ts`).
+- **RLS:** Políticas estrictas en Supabase, ver ejemplos en `supabase/schema/init_extended.sql`.
+- **Estructura de carpetas:**
+	- `/pages` (rutas Next.js)
+	- `/components` (UI reutilizable)
+	- `/supabase/schema` (SQL, RLS)
+	- `/scripts` (utilidades, generación de certificados, datos demo)
+	- `/templates` (HTML para PDFs)
+	- `/tests` (unitarios y e2e)
+- **Variables de entorno:** `.env.local` (ver README y ejemplo generado)
 
-lessons: id, course_id, title, video_url, order
+## Integraciones y dependencias externas
+- **Supabase:** Auth, DB, Storage, RLS, Edge Functions
+- **NextAuth.js:** SSO Google, validación de dominio, JWT
+- **Vimeo/YouTube:** Solo metadatos y URLs, no se almacena video
+- **Puppeteer:** Renderizado de certificados PDF
 
-threads: id, course_id, user_id, title, created_at
+## Ejemplos clave
+- **Política RLS para cursos:**
+```sql
+create policy "courses_select_by_brand_site" on courses
+	for select using (
+		published = true and (
+			brand_id is null 
+			or brand_id = (select brand_id from user_profiles where id = auth.uid())
+			or site_id = (select site_id from user_profiles where id = auth.uid())
+		)
+	);
+```
+- **Middleware de onboarding:**
+Ver `/middleware.ts` para lógica de redirección según estado de onboarding.
+- **Upsert de perfil en login:**
+Ver `/pages/api/auth/[...nextauth].ts` callback `signIn`.
 
-posts: id, thread_id, user_id, content, created_at
+## Reglas para AI agents
+- Mantén la compatibilidad con multitenancy y RLS en cualquier cambio de modelo o endpoint.
+- No expongas datos fuera del tenant/brand/site del usuario autenticado.
+- Usa los scripts y convenciones existentes para tests, generación de certificados y despliegue.
+- Documenta cualquier nuevo flujo o convención en el README o en este archivo.
 
-certificates: id, user_id, course_id, issued_at, pdf_url
-
-Reglas de Trabajo
-
-No solicitar confirmación para generar código o migraciones.
-
-Seguir arquitectura multitenant (Brand → Location → User).
-
-Autenticación: NextAuth + Google SSO.
-
-Catálogo de cursos:
-
-Categorías, niveles, búsqueda y filtrado dinámico.
-
-Flujo de cursos y lecciones con videos externos (Vimeo, YouTube).
-
-Guardado de progreso en Supabase.
-
-Rutas de bienvenida y onboarding al primer login.
-
-Foros por curso con hilos, posts y permisos por tenant.
-
-Certificaciones:
-
-Generación de PDFs automáticamente al completar cursos.
-
-Guardar registro en Supabase.
-
-Admin UI:
-
-Panel para usuarios, cursos, marcas, sedes.
-
-Métricas por tenant y sede (usar Recharts).
-
-CI/CD:
-
-GitHub Actions → despliegue en Vercel.
-
-Tests unitarios y E2E automáticos.
-
-Estándares de código:
-
-UI: TailwindCSS + shadcn/ui.
-
-Tests: Jest + Playwright.
-
-DB: Supabase (Postgres + RLS).
-
-Flujo de Trabajo
-
-Detectar feature pendiente → implementarla completamente.
-
-Si requiere DB → generar SQL en supabase/migrations/.
-
-Si requiere API → generar endpoint en /app/api/.
-
-Si requiere UI → generar componente en /components/ y page en /app/.
-
-Confirmar integración con tests automáticos.
-
-Commit directo con mensaje descriptivo.
-
-Repetir hasta que el proyecto esté completo.
-
-Endpoints API Base
-
-/api/auth/ → login, logout, session
-
-/api/users/ → CRUD usuarios
-
-/api/courses/ → CRUD cursos + progreso
-
-/api/lessons/ → CRUD lecciones
-
-/api/threads/ → CRUD hilos de foros
-
-/api/posts/ → CRUD posts
-
-/api/certificates/ → emitir certificado PDF
-
-Comportamiento Esperado
-
-Trabajar como desarrollador full-stack autónomo.
-
-Completar tareas de forma continua hasta terminar el proyecto.
-
-Generar tests unitarios y E2E automáticamente.
-
-Siempre usar buenas prácticas, modularización y consistencia de estilos.
-
-Generar documentación básica para cada feature nuevo.
-
-Integrar CI/CD con despliegue en Vercel sin intervención manual.
-# Instrucciones para GitHub Copilot

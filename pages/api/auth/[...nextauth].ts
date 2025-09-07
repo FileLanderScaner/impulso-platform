@@ -40,8 +40,10 @@ export default NextAuth({
       return token;
     },
     async session({ session, token }) {
-      session.user.id = token.id;
-      session.user.email = token.email;
+      if (session.user) {
+        (session.user as any).id = token.id;
+        (session.user as any).email = token.email;
+      }
       return session;
     }
   }
